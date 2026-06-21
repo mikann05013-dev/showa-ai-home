@@ -1,0 +1,22 @@
+html {
+  background: #2b211c;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+}
+
+body,
+button,
+input {
+  font-family:
+    'Courier New',
+    'Hiragino Maru Gothic ProN',
+    'Yu Gothic',
+    monospace;
+}
+
+#root {
+  min-height: 100svh;
+}
