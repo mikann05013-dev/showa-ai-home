@@ -18,13 +18,33 @@ import {
   userAvatarStorageKey,
   weatherLabels,
 } from './constants'
-import { loadDecorItems, loadDiaryEntries } from './lib/storage'
+import { usePersistedState } from './hooks/usePersistedState'
+import { parseDecorItems, parseDiaryEntries } from './lib/storage'
 import { fetchLocalWeather, getSeason, getTimeTone, mapWeatherCode } from './lib/weather'
 import { AnimatedScene } from './components/AnimatedScene'
 import { DecorLayer, DecorPanel } from './components/DecorSystem'
 import { WeatherLayer } from './components/WeatherLayer'
 import { PixelOS } from './components/PixelOS'
-import { ChatPanel, DiaryPanel } from './components/LegacyPanels'
+import { ChatPanel } from './components/ChatPanel'
+import { DiaryPanel } from './components/DiaryPanel'
+
+const decorPersistOptions = {
+  parse: parseDecorItems,
+  serialize: JSON.stringify,
+}
+
+const diaryEntriesPersistOptions = {
+  parse: parseDiaryEntries,
+  serialize: JSON.stringify,
+}
+
+const userAvatarPersistOptions = {
+  parse: (value: string) => (value in avatarLabels ? (value as AvatarId) : 'boy'),
+}
+
+const partnerAvatarPersistOptions = {
+  parse: (value: string) => (value in avatarLabels ? (value as AvatarId) : 'cat'),
+}
 
 function App() {
   const fallbackNow = useMemo(() => new Date(), [])
@@ -39,26 +59,26 @@ function App() {
   const [chatOpen, setChatOpen] = useState(false)
   const [pixelOSOpen, setPixelOSOpen] = useState(false)
   const [diaryOpen, setDiaryOpen] = useState(false)
-  const [userDiaryText, setUserDiaryText] = useState(() => window.localStorage.getItem(diaryStorageKey) ?? '')
-  const [aiDiaryText, setAiDiaryText] = useState(() => window.localStorage.getItem(aiDiaryStorageKey) ?? '')
-  const [diaryEntries, setDiaryEntries] = useState<DiaryEntry[]>(() => loadDiaryEntries())
-  const [userAvatarId, setUserAvatarId] = useState<AvatarId>(() => {
-    const saved = window.localStorage.getItem(userAvatarStorageKey)
-    return saved && saved in avatarLabels ? (saved as AvatarId) : 'boy'
-  })
-  const [partnerAvatarId, setPartnerAvatarId] = useState<AvatarId>(() => {
-    const saved = window.localStorage.getItem(partnerAvatarStorageKey)
-    return saved && saved in avatarLabels ? (saved as AvatarId) : 'cat'
-  })
-  const [userAvatarImage, setUserAvatarImage] = useState(() => window.localStorage.getItem(userAvatarImageStorageKey) ?? '')
-  const [partnerAvatarImage, setPartnerAvatarImage] = useState(
-    () => window.localStorage.getItem(partnerAvatarImageStorageKey) ?? '',
+  const [userDiaryText, setUserDiaryText] = usePersistedState(diaryStorageKey, '')
+  const [aiDiaryText, setAiDiaryText] = usePersistedState(aiDiaryStorageKey, '')
+  const [diaryEntries, setDiaryEntries] = usePersistedState<DiaryEntry[]>(
+    diaryEntriesStorageKey,
+    [],
+    diaryEntriesPersistOptions,
   )
+  const [userAvatarId, setUserAvatarId] = usePersistedState<AvatarId>(userAvatarStorageKey, 'boy', userAvatarPersistOptions)
+  const [partnerAvatarId, setPartnerAvatarId] = usePersistedState<AvatarId>(
+    partnerAvatarStorageKey,
+    'cat',
+    partnerAvatarPersistOptions,
+  )
+  const [userAvatarImage, setUserAvatarImage] = usePersistedState(userAvatarImageStorageKey, '')
+  const [partnerAvatarImage, setPartnerAvatarImage] = usePersistedState(partnerAvatarImageStorageKey, '')
   const [messages, setMessages] = useState<Message[]>(initialMessages)
   const [draft, setDraft] = useState('')
   const [chatBusy, setChatBusy] = useState(false)
   const [decorEditing, setDecorEditing] = useState(false)
-  const [decorItems, setDecorItems] = useState<DecorItem[]>(() => loadDecorItems())
+  const [decorItems, setDecorItems] = usePersistedState<DecorItem[]>(decorStorageKey, [], decorPersistOptions)
   const [selectedDecorId, setSelectedDecorId] = useState<number | null>(null)
 
   const activeNow = localWeather.cityTime ?? fallbackNow
@@ -115,38 +135,6 @@ function App() {
       cancelled = true
     }
   }, [])
-
-  useEffect(() => {
-    window.localStorage.setItem(decorStorageKey, JSON.stringify(decorItems))
-  }, [decorItems])
-
-  useEffect(() => {
-    window.localStorage.setItem(diaryStorageKey, userDiaryText)
-  }, [userDiaryText])
-
-  useEffect(() => {
-    window.localStorage.setItem(aiDiaryStorageKey, aiDiaryText)
-  }, [aiDiaryText])
-
-  useEffect(() => {
-    window.localStorage.setItem(diaryEntriesStorageKey, JSON.stringify(diaryEntries))
-  }, [diaryEntries])
-
-  useEffect(() => {
-    window.localStorage.setItem(userAvatarStorageKey, userAvatarId)
-  }, [userAvatarId])
-
-  useEffect(() => {
-    window.localStorage.setItem(partnerAvatarStorageKey, partnerAvatarId)
-  }, [partnerAvatarId])
-
-  useEffect(() => {
-    window.localStorage.setItem(userAvatarImageStorageKey, userAvatarImage)
-  }, [userAvatarImage])
-
-  useEffect(() => {
-    window.localStorage.setItem(partnerAvatarImageStorageKey, partnerAvatarImage)
-  }, [partnerAvatarImage])
 
   function addDecor(kind: DecorKind) {
     const defaults = scene === 'garden' ? { x: 52, y: 76 } : { x: 52, y: 82 }
@@ -373,28 +361,31 @@ function App() {
 
       <PixelOS
         open={pixelOSOpen}
-        messages={messages}
-        draft={draft}
-        userDiaryText={userDiaryText}
-        aiDiaryText={aiDiaryText}
-        diaryEntries={diaryEntries}
-        userAvatarId={userAvatarId}
-        partnerAvatarId={partnerAvatarId}
-        userAvatarImage={userAvatarImage}
-        partnerAvatarImage={partnerAvatarImage}
-        timeTone={timeTone}
-        season={season}
-        weather={weather}
-        localWeather={localWeather}
-        onDraftChange={setDraft}
-        onUserDiaryChange={setUserDiaryText}
-        onAiDiaryChange={setAiDiaryText}
-        onSubmitDiary={submitDiary}
-        onUserAvatarChange={setUserAvatarId}
-        onPartnerAvatarChange={setPartnerAvatarId}
-        onUserAvatarImageChange={setUserAvatarImage}
-        onPartnerAvatarImageChange={setPartnerAvatarImage}
-        onSubmitMessage={submitMessage}
+        environment={{ timeTone, season, weather, localWeather }}
+        chat={{
+          messages,
+          draft,
+          onDraftChange: setDraft,
+          onSubmitMessage: submitMessage,
+        }}
+        diary={{
+          userText: userDiaryText,
+          aiText: aiDiaryText,
+          entries: diaryEntries,
+          onUserTextChange: setUserDiaryText,
+          onAiTextChange: setAiDiaryText,
+          onSubmit: submitDiary,
+        }}
+        avatars={{
+          userId: userAvatarId,
+          partnerId: partnerAvatarId,
+          userImage: userAvatarImage,
+          partnerImage: partnerAvatarImage,
+          onUserIdChange: setUserAvatarId,
+          onPartnerIdChange: setPartnerAvatarId,
+          onUserImageChange: setUserAvatarImage,
+          onPartnerImageChange: setPartnerAvatarImage,
+        }}
         onClose={() => setPixelOSOpen(false)}
       />
 
